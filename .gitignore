@@ -1,0 +1,6 @@
+# Build files
+android-app/build/
+*.idsig
+
+# Keystore
+debug.keystore

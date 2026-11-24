@@ -1,0 +1,9 @@
+{
+  "name": "custom-adblocker",
+  "version": "1.0.0",
+  "description": "Code-level local DNS ad blocker for apps and mobile",
+  "main": "dns-adblocker.js",
+  "scripts": {
+    "start": "node dns-adblocker.js"
+  }
+}
