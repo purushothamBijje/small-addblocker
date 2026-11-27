@@ -24,7 +24,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import java.io.ByteArrayInputStream;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements View.OnClickListener {
     private static final int VPN_REQUEST_CODE = 1001;
     private TextView statusText;
     private Button toggleBtn;
@@ -48,16 +48,19 @@ public class MainActivity extends Activity {
 
         toggleBtn = new Button(this);
         toggleBtn.setTextSize(16);
+        toggleBtn.setOnClickListener(this);
 
         batteryBtn = new Button(this);
         batteryBtn.setText("Disable Battery Saver (Prevent Auto-Kill)");
         batteryBtn.setTextSize(13);
+        batteryBtn.setOnClickListener(this);
 
         openYtBtn = new Button(this);
         openYtBtn.setText("Watch Ad-Free YouTube");
         openYtBtn.setTextSize(15);
         openYtBtn.setBackgroundColor(Color.parseColor("#CC0000"));
         openYtBtn.setTextColor(Color.WHITE);
+        openYtBtn.setOnClickListener(this);
 
         layout.addView(statusText);
         layout.addView(toggleBtn);
@@ -74,85 +77,45 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         ytWebView.setWebChromeClient(new WebChromeClient());
-        ytWebView.setWebViewClient(new AdBlockWebViewClient());
+        ytWebView.setWebViewClient(new YouTubeClient());
 
         layout.addView(ytWebView);
         setContentView(layout);
 
         updateUI();
-
-        toggleBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (!AdBlockerVpnService.isRunning) {
-                    Intent prepareIntent = VpnService.prepare(MainActivity.this);
-                    if (prepareIntent != null) {
-                        startActivityForResult(prepareIntent, VPN_REQUEST_CODE);
-                    } else {
-                        startVpnService();
-                    }
-                } else {
-                    stopVpnService();
-                }
-            }
-        });
-
-        batteryBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                requestBatteryOptimizationExemption();
-            }
-        });
-
-        openYtBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (ytWebView.getVisibility() == View.GONE) {
-                    statusText.setVisibility(View.GONE);
-                    toggleBtn.setVisibility(View.GONE);
-                    batteryBtn.setVisibility(View.GONE);
-                    openYtBtn.setText("Close YouTube Player");
-                    ytWebView.setVisibility(View.VISIBLE);
-                    ytWebView.loadUrl("https://m.youtube.com");
-                } else {
-                    ytWebView.stopLoading();
-                    ytWebView.setVisibility(View.GONE);
-                    statusText.setVisibility(View.VISIBLE);
-                    toggleBtn.setVisibility(View.VISIBLE);
-                    batteryBtn.setVisibility(View.VISIBLE);
-                    openYtBtn.setText("Watch Ad-Free YouTube");
-                }
-            }
-        });
     }
 
-    private static class AdBlockWebViewClient extends WebViewClient {
-        private static final String SCRIPT =
-                "(function() {" +
-                "  function kill() {" +
-                "    var ads = document.querySelectorAll('.ad-showing, .ad-interrupting, .ytp-ad-overlay-container, ytd-promoted-video-renderer, #player-ads');" +
-                "    for (var i = 0; i < ads.length; i++) ads[i].remove();" +
-                "    var skip = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');" +
-                "    if (skip) skip.click();" +
-                "    var vid = document.querySelector('video');" +
-                "    if (vid && document.querySelector('.ad-showing')) vid.currentTime = vid.duration || 9999;" +
-                "  }" +
-                "  setInterval(kill, 400);" +
-                "})();";
-
-        @Override
-        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            String url = request.getUrl().toString();
-            if (url.contains("doubleclick.net") || url.contains("/pagead/") || url.contains("googleads")) {
-                return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+    @Override
+    public void onClick(View v) {
+        if (v == toggleBtn) {
+            if (!AdBlockerVpnService.isRunning) {
+                Intent prepareIntent = VpnService.prepare(this);
+                if (prepareIntent != null) {
+                    startActivityForResult(prepareIntent, VPN_REQUEST_CODE);
+                } else {
+                    startVpnService();
+                }
+            } else {
+                stopVpnService();
             }
-            return super.shouldInterceptRequest(view, request);
-        }
-
-        @Override
-        public void onPageFinished(WebView view, String url) {
-            view.evaluateJavascript(SCRIPT, null);
-            super.onPageFinished(view, url);
+        } else if (v == batteryBtn) {
+            requestBatteryOptimizationExemption();
+        } else if (v == openYtBtn) {
+            if (ytWebView.getVisibility() == View.GONE) {
+                statusText.setVisibility(View.GONE);
+                toggleBtn.setVisibility(View.GONE);
+                batteryBtn.setVisibility(View.GONE);
+                openYtBtn.setText("Close YouTube Player");
+                ytWebView.setVisibility(View.VISIBLE);
+                ytWebView.loadUrl("https://m.youtube.com");
+            } else {
+                ytWebView.stopLoading();
+                ytWebView.setVisibility(View.GONE);
+                statusText.setVisibility(View.VISIBLE);
+                toggleBtn.setVisibility(View.VISIBLE);
+                batteryBtn.setVisibility(View.VISIBLE);
+                openYtBtn.setText("Watch Ad-Free YouTube");
+            }
         }
     }
 
