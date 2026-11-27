@@ -11,16 +11,26 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.View;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.io.ByteArrayInputStream;
 
 public class MainActivity extends Activity {
     private static final int VPN_REQUEST_CODE = 1001;
     private TextView statusText;
     private Button toggleBtn;
     private Button batteryBtn;
+    private Button openYtBtn;
+    private WebView ytWebView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,42 +38,122 @@ public class MainActivity extends Activity {
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setGravity(Gravity.CENTER);
-        layout.setPadding(60, 60, 60, 60);
+        layout.setGravity(Gravity.CENTER_HORIZONTAL);
+        layout.setPadding(40, 40, 40, 40);
 
         statusText = new TextView(this);
-        statusText.setTextSize(22);
+        statusText.setTextSize(20);
         statusText.setGravity(Gravity.CENTER);
+        statusText.setPadding(0, 20, 0, 20);
 
         toggleBtn = new Button(this);
-        toggleBtn.setTextSize(18);
+        toggleBtn.setTextSize(16);
 
         batteryBtn = new Button(this);
         batteryBtn.setText("Disable Battery Saver (Prevent Auto-Kill)");
-        batteryBtn.setTextSize(14);
-        batteryBtn.setPadding(20, 20, 20, 20);
+        batteryBtn.setTextSize(13);
+
+        openYtBtn = new Button(this);
+        openYtBtn.setText("Watch Ad-Free YouTube");
+        openYtBtn.setTextSize(15);
+        openYtBtn.setBackgroundColor(Color.parseColor("#CC0000"));
+        openYtBtn.setTextColor(Color.WHITE);
 
         layout.addView(statusText);
         layout.addView(toggleBtn);
         layout.addView(batteryBtn);
+        layout.addView(openYtBtn);
+
+        ytWebView = new WebView(this);
+        ytWebView.setVisibility(View.GONE);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT);
+        ytWebView.setLayoutParams(params);
+
+        WebSettings settings = ytWebView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        ytWebView.setWebChromeClient(new WebChromeClient());
+        ytWebView.setWebViewClient(new AdBlockWebViewClient());
+
+        layout.addView(ytWebView);
         setContentView(layout);
 
         updateUI();
 
-        toggleBtn.setOnClickListener(v -> {
-            if (!AdBlockerVpnService.isRunning) {
-                Intent prepareIntent = VpnService.prepare(MainActivity.this);
-                if (prepareIntent != null) {
-                    startActivityForResult(prepareIntent, VPN_REQUEST_CODE);
+        toggleBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!AdBlockerVpnService.isRunning) {
+                    Intent prepareIntent = VpnService.prepare(MainActivity.this);
+                    if (prepareIntent != null) {
+                        startActivityForResult(prepareIntent, VPN_REQUEST_CODE);
+                    } else {
+                        startVpnService();
+                    }
                 } else {
-                    startVpnService();
+                    stopVpnService();
                 }
-            } else {
-                stopVpnService();
             }
         });
 
-        batteryBtn.setOnClickListener(v -> requestBatteryOptimizationExemption());
+        batteryBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                requestBatteryOptimizationExemption();
+            }
+        });
+
+        openYtBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (ytWebView.getVisibility() == View.GONE) {
+                    statusText.setVisibility(View.GONE);
+                    toggleBtn.setVisibility(View.GONE);
+                    batteryBtn.setVisibility(View.GONE);
+                    openYtBtn.setText("Close YouTube Player");
+                    ytWebView.setVisibility(View.VISIBLE);
+                    ytWebView.loadUrl("https://m.youtube.com");
+                } else {
+                    ytWebView.stopLoading();
+                    ytWebView.setVisibility(View.GONE);
+                    statusText.setVisibility(View.VISIBLE);
+                    toggleBtn.setVisibility(View.VISIBLE);
+                    batteryBtn.setVisibility(View.VISIBLE);
+                    openYtBtn.setText("Watch Ad-Free YouTube");
+                }
+            }
+        });
+    }
+
+    private static class AdBlockWebViewClient extends WebViewClient {
+        private static final String SCRIPT =
+                "(function() {" +
+                "  function kill() {" +
+                "    var ads = document.querySelectorAll('.ad-showing, .ad-interrupting, .ytp-ad-overlay-container, ytd-promoted-video-renderer, #player-ads');" +
+                "    for (var i = 0; i < ads.length; i++) ads[i].remove();" +
+                "    var skip = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');" +
+                "    if (skip) skip.click();" +
+                "    var vid = document.querySelector('video');" +
+                "    if (vid && document.querySelector('.ad-showing')) vid.currentTime = vid.duration || 9999;" +
+                "  }" +
+                "  setInterval(kill, 400);" +
+                "})();";
+
+        @Override
+        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            String url = request.getUrl().toString();
+            if (url.contains("doubleclick.net") || url.contains("/pagead/") || url.contains("googleads")) {
+                return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+            }
+            return super.shouldInterceptRequest(view, request);
+        }
+
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            view.evaluateJavascript(SCRIPT, null);
+            super.onPageFinished(view, url);
+        }
     }
 
     private void requestBatteryOptimizationExemption() {
@@ -76,8 +166,23 @@ public class MainActivity extends Activity {
                 intent.setData(Uri.parse("package:" + packageName));
                 startActivity(intent);
             } else {
-                Toast.makeText(this, "Battery optimization already disabled for this app!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Battery optimization already disabled!", Toast.LENGTH_SHORT).show();
             }
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (ytWebView.getVisibility() == View.VISIBLE && ytWebView.canGoBack()) {
+            ytWebView.goBack();
+        } else if (ytWebView.getVisibility() == View.VISIBLE) {
+            ytWebView.setVisibility(View.GONE);
+            statusText.setVisibility(View.VISIBLE);
+            toggleBtn.setVisibility(View.VISIBLE);
+            batteryBtn.setVisibility(View.VISIBLE);
+            openYtBtn.setText("Watch Ad-Free YouTube");
+        } else {
+            super.onBackPressed();
         }
     }
 
@@ -91,11 +196,11 @@ public class MainActivity extends Activity {
         if (AdBlockerVpnService.isRunning) {
             statusText.setText("Status: ACTIVE (Blocking Ads)\n");
             statusText.setTextColor(Color.parseColor("#2E7D32"));
-            toggleBtn.setText("Turn OFF Ad Blocker");
+            toggleBtn.setText("Turn OFF System Ad Blocker");
         } else {
             statusText.setText("Status: INACTIVE\n");
             statusText.setTextColor(Color.parseColor("#C62828"));
-            toggleBtn.setText("Turn ON Ad Blocker");
+            toggleBtn.setText("Turn ON System Ad Blocker");
         }
     }
 
