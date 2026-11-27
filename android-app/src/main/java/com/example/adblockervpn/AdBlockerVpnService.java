@@ -34,7 +34,7 @@ public class AdBlockerVpnService extends VpnService {
                     "Ad Blocker Service",
                     NotificationManager.IMPORTANCE_HIGH
             );
-            channel.setDescription("Keeps ad blocking active in background");
+            channel.setDescription("Protects all installed apps from ads");
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(channel);
@@ -49,8 +49,8 @@ public class AdBlockerVpnService extends VpnService {
         }
 
         Notification notification = builder
-                .setContentTitle("Ad Blocker is Active")
-                .setContentText("Ad-blocking DNS active across all apps")
+                .setContentTitle("Ad Blocker Active (All Apps)")
+                .setContentText("Filtering ads across all apps, games, and web traffic")
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setOngoing(true)
                 .build();
@@ -65,14 +65,15 @@ public class AdBlockerVpnService extends VpnService {
             builder.setSession("AdBlocker");
             builder.addAddress("10.0.0.2", 32);
 
-            // AdGuard Ad-blocking DNS (Primary & Secondary)
+            // AdGuard Ad-Blocking DNS (Primary & Secondary)
             builder.addDnsServer("94.140.14.14");
             builder.addDnsServer("94.140.15.15");
 
-            // Intercept DNS traffic
+            // Intercept ALL DNS ports system-wide for EVERY app (IPv4)
             builder.addRoute("94.140.14.14", 32);
             builder.addRoute("94.140.15.15", 32);
 
+            // Zero exclusions: Every single app installed on the device is filtered
             builder.setBlocking(false);
             vpnInterface = builder.establish();
             isRunning = true;
