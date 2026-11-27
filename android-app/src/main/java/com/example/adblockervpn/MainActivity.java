@@ -1,11 +1,15 @@
 package com.example.adblockervpn;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -16,6 +20,7 @@ public class MainActivity extends Activity {
     private static final int VPN_REQUEST_CODE = 1001;
     private TextView statusText;
     private Button toggleBtn;
+    private Button batteryBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,8 +38,14 @@ public class MainActivity extends Activity {
         toggleBtn = new Button(this);
         toggleBtn.setTextSize(18);
 
+        batteryBtn = new Button(this);
+        batteryBtn.setText("Disable Battery Saver (Prevent Auto-Kill)");
+        batteryBtn.setTextSize(14);
+        batteryBtn.setPadding(20, 20, 20, 20);
+
         layout.addView(statusText);
         layout.addView(toggleBtn);
+        layout.addView(batteryBtn);
         setContentView(layout);
 
         updateUI();
@@ -51,6 +62,23 @@ public class MainActivity extends Activity {
                 stopVpnService();
             }
         });
+
+        batteryBtn.setOnClickListener(v -> requestBatteryOptimizationExemption());
+    }
+
+    private void requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent intent = new Intent();
+            String packageName = getPackageName();
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+                intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + packageName));
+                startActivity(intent);
+            } else {
+                Toast.makeText(this, "Battery optimization already disabled for this app!", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     @Override
@@ -99,7 +127,7 @@ public class MainActivity extends Activity {
             if (resultCode == RESULT_OK) {
                 startVpnService();
             } else {
-                Toast.makeText(this, "VPN permission is required to block ads", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "VPN permission required", Toast.LENGTH_LONG).show();
             }
         }
         super.onActivityResult(requestCode, resultCode, data);

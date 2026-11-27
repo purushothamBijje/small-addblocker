@@ -4,7 +4,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
@@ -12,21 +11,8 @@ import android.os.ParcelFileDescriptor;
 public class AdBlockerVpnService extends VpnService {
     public static final String ACTION_CONNECT = "com.example.adblockervpn.CONNECT";
     public static final String ACTION_DISCONNECT = "com.example.adblockervpn.DISCONNECT";
-    public static boolean isRunning = false;
+    public static volatile boolean isRunning = false;
     private ParcelFileDescriptor vpnInterface;
-
-    // Critical media/streaming apps that bundle ads into video streams and freeze if blocked
-    private static final String[] BYPASS_PACKAGES = {
-        "com.google.android.youtube",
-        "com.google.android.apps.youtube.music",
-        "com.netflix.mediaclient",
-        "com.amazon.avod.thirdpartyclient",
-        "in.startv.hotstar",
-        "com.spotify.music",
-        "com.whatsapp",
-        "com.facebook.katana",
-        "com.instagram.android"
-    };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -46,8 +32,9 @@ public class AdBlockerVpnService extends VpnService {
             NotificationChannel channel = new NotificationChannel(
                     channelId,
                     "Ad Blocker Service",
-                    NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_HIGH
             );
+            channel.setDescription("Keeps ad blocking active in background");
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(channel);
@@ -62,9 +49,10 @@ public class AdBlockerVpnService extends VpnService {
         }
 
         Notification notification = builder
-                .setContentTitle("Ad Blocker Active")
-                .setContentText("Ad blocking enabled. Video & messaging apps protected.")
+                .setContentTitle("Ad Blocker is Active")
+                .setContentText("Ad-blocking DNS active across all apps")
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setOngoing(true)
                 .build();
 
         startForeground(1, notification);
@@ -77,27 +65,13 @@ public class AdBlockerVpnService extends VpnService {
             builder.setSession("AdBlocker");
             builder.addAddress("10.0.0.2", 32);
 
-            // Primary: AdGuard Ad-blocking DNS
+            // AdGuard Ad-blocking DNS (Primary & Secondary)
             builder.addDnsServer("94.140.14.14");
             builder.addDnsServer("94.140.15.15");
-            // Reliable fallback so connection NEVER drops or times out
-            builder.addDnsServer("1.1.1.1");
-            builder.addDnsServer("8.8.8.8");
 
-            // Only intercept the DNS server addresses
+            // Intercept DNS traffic
             builder.addRoute("94.140.14.14", 32);
             builder.addRoute("94.140.15.15", 32);
-
-            // Bypass streaming, video, and chat apps to prevent video buffering & frozen connections
-            PackageManager pm = getPackageManager();
-            for (String pkg : BYPASS_PACKAGES) {
-                try {
-                    pm.getPackageInfo(pkg, 0);
-                    builder.addDisallowedApplication(pkg);
-                } catch (PackageManager.NameNotFoundException ignored) {
-                    // App not installed on device, ignore
-                }
-            }
 
             builder.setBlocking(false);
             vpnInterface = builder.establish();
